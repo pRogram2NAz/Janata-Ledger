@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # 🏛️ Local Government Payment Delay Tracker - Nepal
 
 A comprehensive full-stack application for tracking government payments to contractors, ensuring transparency and accountability in Nepal's local government system.
@@ -485,3 +486,6 @@ bun run db:studio         # Open Prisma Studio
 
 **© 2025 Payment Delay Tracker. Built for Nepal Local Governments.**
 **Hackathon Project**
+=======
+# Hack-a-Week-
+>>>>>>> 595ff9b246e6af4f7981627361b0e8860ca36d1b
