@@ -1,0 +1,461 @@
+// Local Government Payment Delay Tracker - Database Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// User roles: LOCAL_GOVERNMENT, CONTRACTOR, CITIZEN
+enum UserRole {
+  LOCAL_GOVERNMENT
+  CONTRACTOR
+  CITIZEN
+}
+
+// Contract status: PENDING, APPROVED, IN_PROGRESS, COMPLETED, CANCELLED
+enum ContractStatus {
+  PENDING
+  APPROVED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+// Payment request status: PENDING, UNDER_REVIEW, APPROVED, PAID, REJECTED
+enum PaymentStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  PAID
+  REJECTED
+}
+
+// Contract size: SMALL, MEDIUM, LARGE
+enum ContractSize {
+  SMALL
+  MEDIUM
+  LARGE
+}
+
+// Contractor qualification status
+enum QualificationStatus {
+  PENDING
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  NEEDS_TEST
+}
+
+// Issue category: NATURAL_DISASTER or CONTRACTOR_FAULT
+enum IssueCategory {
+  NATURAL_DISASTER
+  CONTRACTOR_FAULT
+}
+
+// Citizen rating status
+enum RatingStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  FORGIVEN
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  role      UserRole
+  nidNumber String?
+  phone     String?
+  address   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  contracts        Contract[]         @relation("GovernmentContracts")
+  assignedContracts Contract[]        @relation("ContractorContracts")
+  paymentRequests  PaymentRequest[]
+  dailyPlans       DailyPlan[]
+  workReports      WorkReport[]
+  contractorRating ContractorRating?
+  nidVerifications NIDVerification[]
+  contractorProgress ContractorProgress?
+  contractorQualification ContractorQualification?
+  activityLogs     ActivityLog[]
+  citizenRatings   CitizenRating[]    @relation("CitizenRatings")
+  issueReports     IssueReport[]      @relation("CitizenIssueReports")
+  contractorRatings CitizenRating[]    @relation("ContractorRatings")
+  contractorIssues   IssueReport[]    @relation("ContractorIssueReports")
+
+  @@index([role])
+  @@index([email])
+}
+
+model ContractorQualification {
+  id              String               @id @default(cuid())
+  contractorId     String               @unique
+  contractor       User                 @relation(fields: [contractorId], references: [id])
+
+  // Certificate information
+  certificateUrl   String?              // URL of uploaded certificate
+  certificateNumber String?
+  issuedDate       DateTime?
+  expiryDate      DateTime?
+  issuingAuthority String?
+
+  // Skills and experience
+  skills           String?              // JSON array of skills
+  experienceYears  Int                  @default(0)
+  experienceDetails String?              // Details of previous work
+
+  // Test/Assessment results
+  testTaken        Boolean              @default(false)
+  testDate         DateTime?
+  testScore        Float?               // 0-100 scale
+  testResult       String?              // Detailed test results
+
+  // Initial rating calculation
+  initialRating    Float?               // Calculated from certificate, skills, experience, or test
+
+  // Qualification status
+  status           QualificationStatus   @default(PENDING)
+  reviewedBy       String?              // Government official who reviewed
+  reviewedAt       DateTime?
+  rejectionReason  String?
+
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  @@index([contractorId])
+  @@index([status])
+}
+
+model Contract {
+  id          String        @id @default(cuid())
+  title       String
+  description String
+  budget      Float
+  startDate   DateTime
+  endDate     DateTime?
+  status      ContractStatus @default(PENDING)
+  size        ContractSize   @default(MEDIUM)
+  location    String?
+
+  // Work longevity requirement (e.g., road must last 10 years)
+  expectedLifespanYears Int        @default(10) // Expected durability in years
+  actualLifespanStart   DateTime? // When the work was completed
+  actualLifespanEnd     DateTime? // When the work failed (if it fails early)
+
+  // Government entity (ward office)
+  governmentId String
+  government   User          @relation("GovernmentContracts", fields: [governmentId], references: [id])
+
+  // Contractor assigned
+  contractorId String?
+  contractor   User?         @relation("ContractorContracts", fields: [contractorId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  paymentRequests PaymentRequest[]
+  dailyPlans      DailyPlan[]
+  workReports     WorkReport[]
+  citizenRatings  CitizenRating[]
+  issueReports    IssueReport[]
+
+  @@index([governmentId])
+  @@index([contractorId])
+  @@index([status])
+}
+
+model PaymentRequest {
+  id          String       @id @default(cuid())
+  contractId  String
+  contract    Contract     @relation(fields: [contractId], references: [id])
+
+  requesterId String
+  requester   User         @relation(fields: [requesterId], references: [id])
+
+  amount      Float
+  reason      String
+  workPeriod  String       // e.g., "Jan 1-15, 2025"
+
+  status      PaymentStatus @default(PENDING)
+  approvedBy  String?
+  approvedAt  DateTime?
+  rejectedAt  DateTime?
+  rejectionReason String?
+
+  // Material details for pricing transparency
+  materials   String?              // JSON array of materials with prices
+  materialProof String?              // URL of material receipts/evidence
+
+  // Blockchain integration (for future)
+  blockchainTxHash String?
+  walletAddress     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([contractId])
+  @@index([requesterId])
+  @@index([status])
+}
+
+model DailyPlan {
+  id          String   @id @default(cuid())
+  contractId  String
+  contract    Contract @relation(fields: [contractId], references: [id])
+
+  contractorId String
+  contractor   User     @relation(fields: [contractorId], references: [id])
+
+  planDate    DateTime
+  plannedWork String   // Description of planned work
+  workers     Int      @default(0) // Number of workers planned
+
+  // Detailed material tracking
+  materials   String?              // JSON array of materials to be used
+  estimatedCosts String?           // Estimated costs for materials
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  workReports WorkReport[]
+
+  @@index([contractId])
+  @@index([contractorId])
+  @@index([planDate])
+}
+
+model WorkReport {
+  id          String   @id @default(cuid())
+  contractId  String
+  contract    Contract @relation(fields: [contractId], references: [id])
+
+  contractorId String
+  contractor   User     @relation(fields: [contractorId], references: [id])
+
+  dailyPlanId String?
+  dailyPlan   DailyPlan? @relation(fields: [dailyPlanId], references: [id])
+
+  reportDate  DateTime
+  workSummary String   // Detailed work summary
+  hoursWorked Float
+  workersUsed Int
+  progress    Float    @default(0) // Progress percentage
+
+  // Photo evidence
+  photos      String?  // JSON array of photo URLs
+
+  createdAt   DateTime @default(now())
+  submittedAt DateTime @default(now())
+
+  @@index([contractId])
+  @@index([contractorId])
+  @@index([reportDate])
+}
+
+model CitizenRating {
+  id          String       @id @default(cuid())
+  contractId  String
+  contract    Contract     @relation(fields: [contractId], references: [id])
+
+  contractorId String
+  contractor   User         @relation("ContractorRatings", fields: [contractorId], references: [id])
+
+  citizenId   String
+  citizen     User         @relation("CitizenRatings", fields: [citizenId], references: [id])
+
+  rating      Float        // 1-5 scale rating
+  comment     String?      // Citizen's comments
+
+  // Rating category
+  qualityRating   Float?   // 1-5 quality rating
+  durabilityRating Float?   // 1-5 durability rating
+  timelinessRating Float?   // 1-5 timeliness rating
+
+  // Work longevity tracking
+  reportedDate DateTime
+  issueDate    DateTime?   // When the issue was noticed
+  timeSinceCompletionDays Int? // Days since work completion
+
+  // Proof for negative ratings
+  proofUrl        String?   // URL of proof (photos, videos)
+  proofDescription String?   // Description of the proof
+
+  // Rating status
+  status      RatingStatus @default(PENDING)
+  reviewedBy  String?
+  reviewedAt  DateTime?
+  rejectionReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([contractId])
+  @@index([contractorId])
+  @@index([citizenId])
+  @@index([status])
+}
+
+model IssueReport {
+  id          String       @id @default(cuid())
+  contractId  String
+  contract    Contract     @relation(fields: [contractId], references: [id])
+
+  contractorId String
+  contractor   User         @relation("ContractorIssueReports", fields: [contractorId], references: [id])
+
+  citizenId   String
+  citizen     User         @relation("CitizenIssueReports", fields: [citizenId], references: [id])
+
+  title       String
+  description String
+
+  // Issue category: Natural disaster or Contractor's fault
+  category    IssueCategory
+
+  // Specific issue details
+  issueDate   DateTime
+  issueType   String       // e.g., "Cracks", "Holes", "Drainage", "Landslide"
+  severity    String       // LOW, MEDIUM, HIGH, CRITICAL
+  location    String?
+
+  // Evidence
+  photos      String?      // JSON array of photo URLs
+
+  // Forgiveness request
+  isForgivenessRequest Boolean @default(false)
+  forgivenessReason  String?
+  forgivenessRequestedAt DateTime?
+  forgivenessApproved Boolean @default(false)
+  forgivenessApprovedBy String?
+  forgivenessApprovedAt DateTime?
+
+  // Status
+  status      String       @default("PENDING") // PENDING, UNDER_REVIEW, APPROVED, REJECTED
+  reviewedBy  String?
+  reviewedAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([contractId])
+  @@index([contractorId])
+  @@index([citizenId])
+  @@index([category])
+  @@index([status])
+}
+
+model ContractorRating {
+  id          String   @id @default(cuid())
+  contractorId String  @unique
+  contractor  User     @relation(fields: [contractorId], references: [id])
+
+  overallRating Float @default(0.0) // Start from 0, contractor must prove
+  planRating     Float @default(0.0)  // Based on plan adherence
+  reportQuality  Float @default(0.0)  // Based on report quality
+  paymentHistory Float @default(0.0)  // Based on payment requests
+  workerManagement Float @default(0.0) // Based on worker consistency
+  qualityOfWork  Float @default(0.0)  // Based on citizen ratings
+  durabilityScore Float @default(0.0)  // Based on work longevity
+
+  // Rating history for smart point system
+  pointsGained     Float @default(0.0) // Total points gained
+  pointsLost       Float @default(0.0) // Total points lost
+  forgivenessCount  Int   @default(0)   // Number of times forgiven
+
+  // AI placeholder
+  aiAnalysis String?   // AI analysis text (placeholder for user's AI)
+
+  totalContracts Int    @default(0)
+  activeContracts Int   @default(0)
+  completedContracts Int @default(0)
+
+  // Minimum rating threshold
+  isBelowMinimum Boolean @default(false) // Below 3.8 threshold
+
+  lastUpdated DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@index([contractorId])
+}
+
+model ContractorProgress {
+  id          String   @id @default(cuid())
+  contractorId String
+  contractor  User     @relation(fields: [contractorId], references: [id])
+
+  currentRating Float
+  canBidLarge   Boolean @default(false) // Requires rating >= 4.0
+  canBidMedium  Boolean @default(false) // Requires rating >= 3.8
+  canBidSmall   Boolean @default(true)  // Always available for those >= 3.8
+
+  totalEarnings   Float @default(0)
+  contractsWon    Int   @default(0)
+  contractsActive Int   @default(0)
+
+  // Rating restrictions
+  isSuspended     Boolean @default(false) // If below 3.8
+  suspendedReason  String?
+  suspendedAt      DateTime?
+
+  lastUpdated DateTime @default(now())
+  createdAt   DateTime @default(now())
+
+  @@unique([contractorId])
+}
+
+model NIDVerification {
+  id          String   @id @default(cuid())
+  citizenId   String
+  citizen     User     @relation(fields: [citizenId], references: [id])
+
+  nidNumber   String   @unique
+  fullName    String
+  dob         String   // Date of birth
+  district    String   // Nepal district
+  municipality String
+  wardNumber  Int
+
+  // Verification status
+  verified    Boolean @default(false)
+  verifiedAt  DateTime?
+  verifiedBy  String?
+
+  // Document photo
+  nidPhotoUrl String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([citizenId])
+  @@index([nidNumber])
+}
+
+model ActivityLog {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+
+  action      String   // e.g., "PAYMENT_REQUESTED", "PLAN_SUBMITTED"
+  entity      String   // e.g., "CONTRACT", "PAYMENT"
+  entityId    String
+  details     String?  // JSON details
+
+  ipAddress   String?
+  userAgent   String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([entityId])
+  @@index([createdAt])
+}
