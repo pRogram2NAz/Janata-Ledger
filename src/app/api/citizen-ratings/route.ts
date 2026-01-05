@@ -38,7 +38,18 @@ function calculateRatingChange(
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { contractId, contractorId, citizenId, rating, comment, qualityRating, durabilityRating, timelinessRating, proofUrl, proofDescription } = body;
+    const { 
+      contractId, 
+      contractorId, 
+      citizenId, 
+      rating, 
+      comment, 
+      qualityRating, 
+      durabilityRating, 
+      timelinessRating, 
+      proofUrl, 
+      proofDescription 
+    } = body;
 
     if (!contractId || !contractorId || !citizenId || !rating) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -70,7 +81,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Proof is required for negative ratings (< 3.0)' }, { status: 400 });
     }
 
+    // Check if contractor has a rating record
     const currentRating = contractor.contractorRating;
+
+    if (!currentRating) {
+      return NextResponse.json({ 
+        error: 'Contractor rating record not found. Please initialize contractor rating first.' 
+      }, { status: 404 });
+    }
 
     const ratingChange = calculateRatingChange(currentRating.overallRating, rating);
 
@@ -95,15 +113,23 @@ export async function POST(request: NextRequest) {
       }
     });
 
+    // Calculate new values
+    const newOverallRating = ratingChange.newOverallRating;
+    const newQualityOfWork = qualityRating || currentRating.qualityOfWork;
+    const newDurabilityScore = durabilityRating || currentRating.durabilityScore;
+    const newPointsGained = currentRating.pointsGained + ratingChange.pointsGained;
+    const newPointsLost = currentRating.pointsLost + ratingChange.pointsLost;
+    const isBelowMinimum = newOverallRating < 3.8;
+
     await db.contractorRating.update({
       where: { contractorId },
       data: {
-        overallRating: ratingChange.newOverallRating,
-        qualityOfWork: qualityRating || currentRating.qualityOfWork,
-        durabilityScore: durabilityRating || currentRating.durabilityScore,
-        pointsGained: currentRating.pointsGained + ratingChange.pointsGained,
-        pointsLost: currentRating.pointsLost + ratingChange.pointsLost,
-        isBelowMinimum: ratingChange.newOverallRating < 3.8,
+        overallRating: newOverallRating,
+        qualityOfWork: newQualityOfWork,
+        durabilityScore: newDurabilityScore,
+        pointsGained: newPointsGained,
+        pointsLost: newPointsLost,
+        isBelowMinimum,
         lastUpdated: new Date()
       }
     });
@@ -111,12 +137,14 @@ export async function POST(request: NextRequest) {
     await db.contractorProgress.update({
       where: { contractorId },
       data: {
-        currentRating: ratingChange.newOverallRating,
-        canBidMedium: ratingChange.newOverallRating >= 3.8,
-        canBidLarge: ratingChange.newOverallRating >= 4.0,
-        canBidSmall: ratingChange.newOverallRating >= 3.8,
-        isSuspended: ratingChange.newOverallRating < 3.8,
-        suspendedReason: ratingChange.newOverallRating < 3.8 ? 'Rating below minimum threshold of 3.8' : null,
+        currentRating: newOverallRating,
+        canBidMedium: newOverallRating >= 3.8,
+        canBidLarge: newOverallRating >= 4.0,
+        canBidSmall: newOverallRating >= 3.8,
+        isSuspended: isBelowMinimum,
+        suspendedReason: isBelowMinimum 
+          ? 'Rating below minimum threshold of 3.8' 
+          : null,
         lastUpdated: new Date()
       }
     });
@@ -125,10 +153,19 @@ export async function POST(request: NextRequest) {
       success: true,
       message: 'Rating submitted successfully',
       citizenRating,
-      updatedRating: { overallRating: ratingChange.newOverallRating },
-      ratingChange: { previous: currentRating.overallRating, new: ratingChange.newOverallRating, pointsGained: ratingChange.pointsGained, pointsLost: ratingChange.pointsLost }
+      updatedRating: { 
+        overallRating: newOverallRating 
+      },
+      ratingChange: { 
+        previous: currentRating.overallRating, 
+        new: newOverallRating, 
+        pointsGained: ratingChange.pointsGained, 
+        pointsLost: ratingChange.pointsLost 
+      }
     }, { status: 201 });
+
   } catch (error) {
+    console.error('Error submitting rating:', error);
     return NextResponse.json({ error: 'Failed to submit rating' }, { status: 500 });
   }
 }
@@ -158,6 +195,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ success: true, ratings });
   } catch (error) {
+    console.error('Error fetching ratings:', error);
     return NextResponse.json({ error: 'Failed to fetch ratings' }, { status: 500 });
   }
 }

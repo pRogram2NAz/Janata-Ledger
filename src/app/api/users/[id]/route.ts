@@ -20,11 +20,8 @@ export async function GET(
         createdAt: true,
         contractorRating: true,
         contractorProgress: true,
-        contracts: {
-          include: {
-            contract: true
-          }
-        }
+        // Option 1: Just include contracts directly (no nested include needed)
+        contracts: true
       }
     });
 
@@ -36,7 +33,6 @@ export async function GET(
     }
 
     return NextResponse.json({ success: true, user });
-
   } catch (error) {
     console.error('Get user error:', error);
     return NextResponse.json(
@@ -73,7 +69,6 @@ export async function PATCH(
     });
 
     return NextResponse.json({ success: true, user });
-
   } catch (error) {
     console.error('Update user error:', error);
     return NextResponse.json(

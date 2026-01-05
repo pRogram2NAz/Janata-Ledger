@@ -64,6 +64,13 @@ enum RatingStatus {
   FORGIVEN
 }
 
+// Complaint status/flag
+enum ComplaintStatus {
+  VERIFIED
+  PENDING_REVIEW
+  REJECTED
+}
+
 model User {
   id        String   @id @default(cuid())
   email     String   @unique
@@ -76,66 +83,67 @@ model User {
   updatedAt DateTime @updatedAt
 
   // Relations
-  contracts        Contract[]         @relation("GovernmentContracts")
-  assignedContracts Contract[]        @relation("ContractorContracts")
-  paymentRequests  PaymentRequest[]
-  dailyPlans       DailyPlan[]
-  workReports      WorkReport[]
-  contractorRating ContractorRating?
-  nidVerifications NIDVerification[]
-  contractorProgress ContractorProgress?
+  contracts               Contract[]               @relation("GovernmentContracts")
+  assignedContracts       Contract[]               @relation("ContractorContracts")
+  paymentRequests         PaymentRequest[]
+  dailyPlans              DailyPlan[]
+  workReports             WorkReport[]
+  contractorRating        ContractorRating?
+  nidVerifications        NIDVerification[]
+  contractorProgress      ContractorProgress?
   contractorQualification ContractorQualification?
-  activityLogs     ActivityLog[]
-  citizenRatings   CitizenRating[]    @relation("CitizenRatings")
-  issueReports     IssueReport[]      @relation("CitizenIssueReports")
-  contractorRatings CitizenRating[]    @relation("ContractorRatings")
-  contractorIssues   IssueReport[]    @relation("ContractorIssueReports")
+  activityLogs            ActivityLog[]
+  citizenRatings          CitizenRating[]          @relation("CitizenRatings")
+  issueReports            IssueReport[]            @relation("CitizenIssueReports")
+  contractorRatings       CitizenRating[]          @relation("ContractorRatings")
+  contractorIssues        IssueReport[]            @relation("ContractorIssueReports")
+  complaints              Complaint[]
 
   @@index([role])
   @@index([email])
 }
 
 model ContractorQualification {
-  id              String               @id @default(cuid())
-  contractorId     String               @unique
-  contractor       User                 @relation(fields: [contractorId], references: [id])
+  id           String @id @default(cuid())
+  contractorId String @unique
+  contractor   User   @relation(fields: [contractorId], references: [id])
 
   // Certificate information
-  certificateUrl   String?              // URL of uploaded certificate
+  certificateUrl    String? // URL of uploaded certificate
   certificateNumber String?
-  issuedDate       DateTime?
-  expiryDate      DateTime?
-  issuingAuthority String?
+  issuedDate        DateTime?
+  expiryDate        DateTime?
+  issuingAuthority  String?
 
   // Skills and experience
-  skills           String?              // JSON array of skills
-  experienceYears  Int                  @default(0)
-  experienceDetails String?              // Details of previous work
+  skills            String? // JSON array of skills
+  experienceYears   Int     @default(0)
+  experienceDetails String? // Details of previous work
 
   // Test/Assessment results
-  testTaken        Boolean              @default(false)
-  testDate         DateTime?
-  testScore        Float?               // 0-100 scale
-  testResult       String?              // Detailed test results
+  testTaken  Boolean   @default(false)
+  testDate   DateTime?
+  testScore  Float? // 0-100 scale
+  testResult String? // Detailed test results
 
   // Initial rating calculation
-  initialRating    Float?               // Calculated from certificate, skills, experience, or test
+  initialRating Float? // Calculated from certificate, skills, experience, or test
 
   // Qualification status
-  status           QualificationStatus   @default(PENDING)
-  reviewedBy       String?              // Government official who reviewed
-  reviewedAt       DateTime?
-  rejectionReason  String?
+  status          QualificationStatus @default(PENDING)
+  reviewedBy      String? // Government official who reviewed
+  reviewedAt      DateTime?
+  rejectionReason String?
 
-  createdAt        DateTime             @default(now())
-  updatedAt        DateTime             @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([contractorId])
   @@index([status])
 }
 
 model Contract {
-  id          String        @id @default(cuid())
+  id          String         @id @default(cuid())
   title       String
   description String
   budget      Float
@@ -146,58 +154,120 @@ model Contract {
   location    String?
 
   // Work longevity requirement (e.g., road must last 10 years)
-  expectedLifespanYears Int        @default(10) // Expected durability in years
-  actualLifespanStart   DateTime? // When the work was completed
-  actualLifespanEnd     DateTime? // When the work failed (if it fails early)
+  expectedLifespanYears Int       @default(10)
+  actualLifespanStart   DateTime?
+  actualLifespanEnd     DateTime?
 
   // Government entity (ward office)
   governmentId String
-  government   User          @relation("GovernmentContracts", fields: [governmentId], references: [id])
+  government   User   @relation("GovernmentContracts", fields: [governmentId], references: [id])
 
   // Contractor assigned
   contractorId String?
-  contractor   User?         @relation("ContractorContracts", fields: [contractorId], references: [id])
+  contractor   User?   @relation("ContractorContracts", fields: [contractorId], references: [id])
+
+  // Assignment tracking
+  assignedAt DateTime?
+  assignedBy String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
-  paymentRequests PaymentRequest[]
-  dailyPlans      DailyPlan[]
-  workReports     WorkReport[]
-  citizenRatings  CitizenRating[]
-  issueReports    IssueReport[]
+  paymentRequests  PaymentRequest[]
+  dailyPlans       DailyPlan[]
+  workReports      WorkReport[]
+  citizenRatings   CitizenRating[]
+  issueReports     IssueReport[]
+  complaints       Complaint[]
+  projectLocations ProjectLocation[]
 
   @@index([governmentId])
   @@index([contractorId])
   @@index([status])
 }
 
+model ProjectLocation {
+  id         String   @id @default(cuid())
+  contractId String   @unique
+  contract   Contract @relation(fields: [contractId], references: [id])
+
+  latitude  Float
+  longitude Float
+  address   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([contractId])
+}
+
+model Complaint {
+  id           String          @id @default(cuid())
+  contractorId String
+  contractor   User            @relation(fields: [contractorId], references: [id])
+  contractId   String?
+  contract     Contract?       @relation(fields: [contractId], references: [id])
+
+  // Complaint details
+  text              String
+  sentimentScore    Float // -1 to +1
+  complaintType     String // QUALITY_ISSUE, SAFETY_CONCERN, etc.
+  confidence        Float // Classification confidence 0-1
+
+  // Image and GPS data
+  imageUrl          String?
+  gpsLatitude       Float?
+  gpsLongitude      Float?
+  photoTimestamp    DateTime?
+  locationVerified  Boolean         @default(false)
+  timestampVerified Boolean         @default(true)
+  distanceMeters    Float?
+
+  // User information
+  userEmail String
+
+  // Rating impact
+  oldRating Float
+  newRating Float
+
+  // Status/Flag
+  status ComplaintStatus @default(PENDING_REVIEW)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([contractorId])
+  @@index([contractId])
+  @@index([status])
+  @@index([createdAt])
+}
+
 model PaymentRequest {
-  id          String       @id @default(cuid())
-  contractId  String
-  contract    Contract     @relation(fields: [contractId], references: [id])
+  id         String   @id @default(cuid())
+  contractId String
+  contract   Contract @relation(fields: [contractId], references: [id])
 
   requesterId String
-  requester   User         @relation(fields: [requesterId], references: [id])
+  requester   User   @relation(fields: [requesterId], references: [id])
 
-  amount      Float
-  reason      String
-  workPeriod  String       // e.g., "Jan 1-15, 2025"
+  amount     Float
+  reason     String
+  workPeriod String // e.g., "Jan 1-15, 2025"
 
-  status      PaymentStatus @default(PENDING)
-  approvedBy  String?
-  approvedAt  DateTime?
-  rejectedAt  DateTime?
+  status          PaymentStatus @default(PENDING)
+  approvedBy      String?
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
   rejectionReason String?
 
   // Material details for pricing transparency
-  materials   String?              // JSON array of materials with prices
-  materialProof String?              // URL of material receipts/evidence
+  materials     String? // JSON array of materials with prices
+  materialProof String? // URL of material receipts/evidence
 
   // Blockchain integration (for future)
   blockchainTxHash String?
-  walletAddress     String?
+  walletAddress    String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -208,20 +278,20 @@ model PaymentRequest {
 }
 
 model DailyPlan {
-  id          String   @id @default(cuid())
-  contractId  String
-  contract    Contract @relation(fields: [contractId], references: [id])
+  id         String   @id @default(cuid())
+  contractId String
+  contract   Contract @relation(fields: [contractId], references: [id])
 
   contractorId String
-  contractor   User     @relation(fields: [contractorId], references: [id])
+  contractor   User   @relation(fields: [contractorId], references: [id])
 
   planDate    DateTime
-  plannedWork String   // Description of planned work
+  plannedWork String // Description of planned work
   workers     Int      @default(0) // Number of workers planned
 
   // Detailed material tracking
-  materials   String?              // JSON array of materials to be used
-  estimatedCosts String?           // Estimated costs for materials
+  materials      String? // JSON array of materials to be used
+  estimatedCosts String? // Estimated costs for materials
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -235,24 +305,24 @@ model DailyPlan {
 }
 
 model WorkReport {
-  id          String   @id @default(cuid())
-  contractId  String
-  contract    Contract @relation(fields: [contractId], references: [id])
+  id         String   @id @default(cuid())
+  contractId String
+  contract   Contract @relation(fields: [contractId], references: [id])
 
   contractorId String
-  contractor   User     @relation(fields: [contractorId], references: [id])
+  contractor   User   @relation(fields: [contractorId], references: [id])
 
   dailyPlanId String?
   dailyPlan   DailyPlan? @relation(fields: [dailyPlanId], references: [id])
 
   reportDate  DateTime
-  workSummary String   // Detailed work summary
+  workSummary String // Detailed work summary
   hoursWorked Float
   workersUsed Int
   progress    Float    @default(0) // Progress percentage
 
   // Photo evidence
-  photos      String?  // JSON array of photo URLs
+  photos String? // JSON array of photo URLs
 
   createdAt   DateTime @default(now())
   submittedAt DateTime @default(now())
@@ -263,37 +333,37 @@ model WorkReport {
 }
 
 model CitizenRating {
-  id          String       @id @default(cuid())
-  contractId  String
-  contract    Contract     @relation(fields: [contractId], references: [id])
+  id         String   @id @default(cuid())
+  contractId String
+  contract   Contract @relation(fields: [contractId], references: [id])
 
   contractorId String
-  contractor   User         @relation("ContractorRatings", fields: [contractorId], references: [id])
+  contractor   User   @relation("ContractorRatings", fields: [contractorId], references: [id])
 
-  citizenId   String
-  citizen     User         @relation("CitizenRatings", fields: [citizenId], references: [id])
+  citizenId String
+  citizen   User   @relation("CitizenRatings", fields: [citizenId], references: [id])
 
-  rating      Float        // 1-5 scale rating
-  comment     String?      // Citizen's comments
+  rating  Float // 1-5 scale rating
+  comment String? // Citizen's comments
 
   // Rating category
-  qualityRating   Float?   // 1-5 quality rating
-  durabilityRating Float?   // 1-5 durability rating
-  timelinessRating Float?   // 1-5 timeliness rating
+  qualityRating    Float? // 1-5 quality rating
+  durabilityRating Float? // 1-5 durability rating
+  timelinessRating Float? // 1-5 timeliness rating
 
   // Work longevity tracking
-  reportedDate DateTime
-  issueDate    DateTime?   // When the issue was noticed
+  reportedDate            DateTime
+  issueDate               DateTime? // When the issue was noticed
   timeSinceCompletionDays Int? // Days since work completion
 
   // Proof for negative ratings
-  proofUrl        String?   // URL of proof (photos, videos)
-  proofDescription String?   // Description of the proof
+  proofUrl         String? // URL of proof (photos, videos)
+  proofDescription String? // Description of the proof
 
   // Rating status
-  status      RatingStatus @default(PENDING)
-  reviewedBy  String?
-  reviewedAt  DateTime?
+  status          RatingStatus @default(PENDING)
+  reviewedBy      String?
+  reviewedAt      DateTime?
   rejectionReason String?
 
   createdAt DateTime @default(now())
@@ -306,43 +376,43 @@ model CitizenRating {
 }
 
 model IssueReport {
-  id          String       @id @default(cuid())
-  contractId  String
-  contract    Contract     @relation(fields: [contractId], references: [id])
+  id         String   @id @default(cuid())
+  contractId String
+  contract   Contract @relation(fields: [contractId], references: [id])
 
   contractorId String
-  contractor   User         @relation("ContractorIssueReports", fields: [contractorId], references: [id])
+  contractor   User   @relation("ContractorIssueReports", fields: [contractorId], references: [id])
 
-  citizenId   String
-  citizen     User         @relation("CitizenIssueReports", fields: [citizenId], references: [id])
+  citizenId String
+  citizen   User   @relation("CitizenIssueReports", fields: [citizenId], references: [id])
 
   title       String
   description String
 
   // Issue category: Natural disaster or Contractor's fault
-  category    IssueCategory
+  category IssueCategory
 
   // Specific issue details
-  issueDate   DateTime
-  issueType   String       // e.g., "Cracks", "Holes", "Drainage", "Landslide"
-  severity    String       // LOW, MEDIUM, HIGH, CRITICAL
-  location    String?
+  issueDate DateTime
+  issueType String // e.g., "Cracks", "Holes", "Drainage", "Landslide"
+  severity  String // LOW, MEDIUM, HIGH, CRITICAL
+  location  String?
 
   // Evidence
-  photos      String?      // JSON array of photo URLs
+  photos String? // JSON array of photo URLs
 
   // Forgiveness request
-  isForgivenessRequest Boolean @default(false)
-  forgivenessReason  String?
+  isForgivenessRequest   Boolean   @default(false)
+  forgivenessReason      String?
   forgivenessRequestedAt DateTime?
-  forgivenessApproved Boolean @default(false)
-  forgivenessApprovedBy String?
-  forgivenessApprovedAt DateTime?
+  forgivenessApproved    Boolean   @default(false)
+  forgivenessApprovedBy  String?
+  forgivenessApprovedAt  DateTime?
 
   // Status
-  status      String       @default("PENDING") // PENDING, UNDER_REVIEW, APPROVED, REJECTED
-  reviewedBy  String?
-  reviewedAt  DateTime?
+  status     String    @default("PENDING") // PENDING, UNDER_REVIEW, APPROVED, REJECTED
+  reviewedBy String?
+  reviewedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -355,28 +425,38 @@ model IssueReport {
 }
 
 model ContractorRating {
-  id          String   @id @default(cuid())
-  contractorId String  @unique
-  contractor  User     @relation(fields: [contractorId], references: [id])
+  id           String @id @default(cuid())
+  contractorId String @unique
+  contractor   User   @relation(fields: [contractorId], references: [id])
 
-  overallRating Float @default(0.0) // Start from 0, contractor must prove
-  planRating     Float @default(0.0)  // Based on plan adherence
-  reportQuality  Float @default(0.0)  // Based on report quality
-  paymentHistory Float @default(0.0)  // Based on payment requests
+  // Main rating (affected by AI complaint system)
+  rating Float @default(5.0) // Start from 5.0, affected by complaints
+
+  // Complaint statistics
+  totalComplaints    Int @default(0)
+  verifiedComplaints Int @default(0)
+  rejectedComplaints Int @default(0)
+  pendingComplaints  Int @default(0)
+
+  // Original rating metrics
+  overallRating    Float @default(0.0) // Start from 0, contractor must prove
+  planRating       Float @default(0.0) // Based on plan adherence
+  reportQuality    Float @default(0.0) // Based on report quality
+  paymentHistory   Float @default(0.0) // Based on payment requests
   workerManagement Float @default(0.0) // Based on worker consistency
-  qualityOfWork  Float @default(0.0)  // Based on citizen ratings
-  durabilityScore Float @default(0.0)  // Based on work longevity
+  qualityOfWork    Float @default(0.0) // Based on citizen ratings
+  durabilityScore  Float @default(0.0) // Based on work longevity
 
   // Rating history for smart point system
   pointsGained     Float @default(0.0) // Total points gained
   pointsLost       Float @default(0.0) // Total points lost
-  forgivenessCount  Int   @default(0)   // Number of times forgiven
+  forgivenessCount Int   @default(0) // Number of times forgiven
 
   // AI placeholder
-  aiAnalysis String?   // AI analysis text (placeholder for user's AI)
+  aiAnalysis String? // AI analysis text (placeholder for user's AI)
 
-  totalContracts Int    @default(0)
-  activeContracts Int   @default(0)
+  totalContracts     Int @default(0)
+  activeContracts    Int @default(0)
   completedContracts Int @default(0)
 
   // Minimum rating threshold
@@ -386,26 +466,27 @@ model ContractorRating {
   createdAt   DateTime @default(now())
 
   @@index([contractorId])
+  @@index([rating])
 }
 
 model ContractorProgress {
-  id          String   @id @default(cuid())
+  id           String @id @default(cuid())
   contractorId String
-  contractor  User     @relation(fields: [contractorId], references: [id])
+  contractor   User   @relation(fields: [contractorId], references: [id])
 
   currentRating Float
   canBidLarge   Boolean @default(false) // Requires rating >= 4.0
   canBidMedium  Boolean @default(false) // Requires rating >= 3.8
-  canBidSmall   Boolean @default(true)  // Always available for those >= 3.8
+  canBidSmall   Boolean @default(true) // Always available for those >= 3.8
 
   totalEarnings   Float @default(0)
   contractsWon    Int   @default(0)
   contractsActive Int   @default(0)
 
   // Rating restrictions
-  isSuspended     Boolean @default(false) // If below 3.8
-  suspendedReason  String?
-  suspendedAt      DateTime?
+  isSuspended     Boolean   @default(false) // If below 3.8
+  suspendedReason String?
+  suspendedAt     DateTime?
 
   lastUpdated DateTime @default(now())
   createdAt   DateTime @default(now())
@@ -414,21 +495,21 @@ model ContractorProgress {
 }
 
 model NIDVerification {
-  id          String   @id @default(cuid())
-  citizenId   String
-  citizen     User     @relation(fields: [citizenId], references: [id])
+  id        String @id @default(cuid())
+  citizenId String
+  citizen   User   @relation(fields: [citizenId], references: [id])
 
-  nidNumber   String   @unique
-  fullName    String
-  dob         String   // Date of birth
-  district    String   // Nepal district
+  nidNumber    String @unique
+  fullName     String
+  dob          String // Date of birth
+  district     String // Nepal district
   municipality String
-  wardNumber  Int
+  wardNumber   Int
 
   // Verification status
-  verified    Boolean @default(false)
-  verifiedAt  DateTime?
-  verifiedBy  String?
+  verified   Boolean   @default(false)
+  verifiedAt DateTime?
+  verifiedBy String?
 
   // Document photo
   nidPhotoUrl String?
@@ -441,17 +522,17 @@ model NIDVerification {
 }
 
 model ActivityLog {
-  id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id])
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
 
-  action      String   // e.g., "PAYMENT_REQUESTED", "PLAN_SUBMITTED"
-  entity      String   // e.g., "CONTRACT", "PAYMENT"
-  entityId    String
-  details     String?  // JSON details
+  action   String // e.g., "PAYMENT_REQUESTED", "PLAN_SUBMITTED"
+  entity   String // e.g., "CONTRACT", "PAYMENT"
+  entityId String
+  details  String? // JSON details
 
-  ipAddress   String?
-  userAgent   String?
+  ipAddress String?
+  userAgent String?
 
   createdAt DateTime @default(now())
 

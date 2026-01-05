@@ -304,81 +304,119 @@ export default function ContractorDashboard({ user, onLogout }: Props) {
             <div className="space-y-4">
               <div className="flex justify-end">
                 <Dialog>
-                  <DialogTrigger asChild>
-                    <Button className="bg-teal-600 hover:bg-teal-700">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Request Payment
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Request Payment</DialogTitle>
-                      <DialogDescription>Submit a payment request for completed work</DialogDescription>
-                    </DialogHeader>
-                    <form onSubmit={handleSubmitPayment} className="space-y-4">
-                      <div className="space-y-2">
-                        <Label>Contract</Label>
-                        <Select value={paymentForm.contractId} onValueChange={(value) => setPaymentForm({ ...paymentForm, contractId: value })}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select contract" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {contracts.map((contract: any) => (
-                              <SelectItem key={contract.id} value={contract.id}>{contract.title}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Amount (Rs.)</Label>
-                        <Input
-                          type="number"
-                          value={paymentForm.amount}
-                          onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
-                          placeholder="Amount"
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Work Period</Label>
-                        <Input
-                          value={paymentForm.workPeriod}
-                          onChange={(e) => setPaymentForm({ ...paymentForm, workPeriod: e.target.value })}
-                          placeholder="e.g., Jan 1-15, 2025"
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Reason</Label>
-                        <Textarea
-                          value={paymentForm.reason}
-                          onChange={(e) => setPaymentForm({ ...paymentForm, reason: e.target.value })}
-                          placeholder="Payment reason..."
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Material Details (Optional)</Label>
-                        <Input
-                          value={paymentForm.materials}
-                          onChange={(e) => setPaymentForm({ ...paymentForm, materials: e.target.value })}
-                          placeholder='JSON: [{"name": "Cement", "quantity": 50, "unit": "bags", "pricePerUnit": 850, "totalPrice": 42500}]'
-                        />
-                        <p className="text-xs text-gray-500">JSON format for material details (for pricing transparency)</p>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Receipt URL (Optional)</Label>
-                        <Input
-                          value={paymentForm.materialProof}
-                          onChange={(e) => setPaymentForm({ ...paymentForm, materialProof: e.target.value })}
-                          placeholder="https://..."
-                        />
-                        <p className="text-xs text-gray-500">Upload receipts to material storage and paste URL here</p>
-                      </div>
-                      <Button type="submit" className="w-full bg-teal-600 hover:bg-teal-700">Submit Payment Request</Button>
-                    </form>
-                  </DialogContent>
-                </Dialog>
+  <DialogTrigger asChild>
+    <Button 
+      className="bg-teal-600 hover:bg-teal-700"
+      disabled={contracts.length === 0}
+    >
+      <Plus className="h-4 w-4 mr-2" />
+      Request Payment
+      {contracts.length === 0 && ' (No Contracts)'}
+    </Button>
+  </DialogTrigger>
+  <DialogContent className="max-h-[90vh] overflow-y-auto">
+    <DialogHeader>
+      <DialogTitle>Request Payment</DialogTitle>
+      <DialogDescription>Submit a payment request for completed work</DialogDescription>
+    </DialogHeader>
+    
+    {loading ? (
+      <div className="py-8 text-center text-gray-500">
+        <div className="animate-spin h-8 w-8 border-4 border-teal-600 border-t-transparent rounded-full mx-auto mb-2"></div>
+        Loading contracts...
+      </div>
+    ) : contracts.length === 0 ? (
+      <div className="py-8 text-center">
+        <p className="text-gray-500 mb-2">No contracts available</p>
+        <p className="text-sm text-amber-600">
+          You need to have at least one assigned contract to request payment.
+        </p>
+      </div>
+    ) : (
+      <form onSubmit={handleSubmitPayment} className="space-y-4">
+        <div className="space-y-2">
+          <Label>Contract *</Label>
+          <Select 
+            value={paymentForm.contractId} 
+            onValueChange={(value) => setPaymentForm({ ...paymentForm, contractId: value })}
+          >
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select contract" />
+            </SelectTrigger>
+            <SelectContent>
+              {contracts.map((contract: any) => (
+                <SelectItem key={contract.id} value={contract.id}>
+                  {contract.title} - {contract.location || 'No location'}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        
+        <div className="space-y-2">
+          <Label>Amount (Rs.) *</Label>
+          <Input
+            type="number"
+            value={paymentForm.amount}
+            onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
+            placeholder="Enter amount"
+            required
+            min="0"
+          />
+        </div>
+        
+        <div className="space-y-2">
+          <Label>Work Period *</Label>
+          <Input
+            value={paymentForm.workPeriod}
+            onChange={(e) => setPaymentForm({ ...paymentForm, workPeriod: e.target.value })}
+            placeholder="e.g., Jan 1-15, 2025"
+            required
+          />
+        </div>
+        
+        <div className="space-y-2">
+          <Label>Reason *</Label>
+          <Textarea
+            value={paymentForm.reason}
+            onChange={(e) => setPaymentForm({ ...paymentForm, reason: e.target.value })}
+            placeholder="Describe the reason for this payment request..."
+            required
+            rows={3}
+          />
+        </div>
+        
+        <div className="space-y-2">
+          <Label>Material Details (Optional)</Label>
+          <Textarea
+            value={paymentForm.materials}
+            onChange={(e) => setPaymentForm({ ...paymentForm, materials: e.target.value })}
+            placeholder="List materials used..."
+            rows={2}
+          />
+        </div>
+        
+        <div className="space-y-2">
+          <Label>Receipt/Proof URL (Optional)</Label>
+          <Input
+            type="url"
+            value={paymentForm.materialProof}
+            onChange={(e) => setPaymentForm({ ...paymentForm, materialProof: e.target.value })}
+            placeholder="https://..."
+          />
+        </div>
+        
+        <Button 
+          type="submit" 
+          className="w-full bg-teal-600 hover:bg-teal-700"
+          disabled={!paymentForm.contractId || !paymentForm.amount || !paymentForm.reason}
+        >
+          Submit Payment Request
+        </Button>
+      </form>
+    )}
+  </DialogContent>
+</Dialog>
               </div>
 
               <Card>

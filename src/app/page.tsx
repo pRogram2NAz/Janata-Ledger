@@ -48,7 +48,7 @@ export default function Home() {
           {/* Hero Section */}
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">
-              Track Government Payments Transparently
+              Civic Track Platform 
             </h2>
             <p className="text-xl text-gray-600 dark:text-gray-400 max-w-3xl mx-auto">
               A comprehensive system for local governments, contractors, and citizens to 
@@ -303,10 +303,7 @@ export default function Home() {
             <div className="container mx-auto px-4 py-6">
               <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                 <div className="text-sm text-gray-600 dark:text-gray-400">
-                  © 2025 Payment Delay Tracker. Built for Nepal Local Governments.
-                </div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">
-                  Hackathon Project
+                  © 2025 Civic Track Platform . Built for Nepal Local Governments.
                 </div>
               </div>
             </div>

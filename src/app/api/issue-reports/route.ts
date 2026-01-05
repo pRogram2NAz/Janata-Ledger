@@ -8,7 +8,7 @@ function calculateIssuePenalty(category: IssueCategory, severity: string): numbe
     return 0; // Natural disasters don't affect rating
   }
 
-  const severityMultiplier: any = {
+  const severityMultiplier: Record<string, number> = {
     LOW: 0.5,
     MEDIUM: 1.0,
     HIGH: 1.5,
@@ -21,7 +21,19 @@ function calculateIssuePenalty(category: IssueCategory, severity: string): numbe
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { contractId, contractorId, citizenId, title, description, category, issueDate, issueType, severity, location, photos } = body;
+    const { 
+      contractId, 
+      contractorId, 
+      citizenId, 
+      title, 
+      description, 
+      category, 
+      issueDate, 
+      issueType, 
+      severity, 
+      location, 
+      photos 
+    } = body;
 
     if (!contractId || !contractorId || !citizenId || !title || !category || !issueDate) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -42,8 +54,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Contract not found' }, { status: 404 });
     }
 
-    const contractor = await db.user.findUnique({ where: { id: contractorId, role: 'CONTRACTOR' } });
-    const citizen = await db.user.findUnique({ where: { id: citizenId, role: 'CITIZEN' } });
+    const contractor = await db.user.findUnique({ 
+      where: { id: contractorId, role: 'CONTRACTOR' } 
+    });
+    
+    const citizen = await db.user.findUnique({ 
+      where: { id: citizenId, role: 'CITIZEN' } 
+    });
 
     if (!contractor) {
       return NextResponse.json({ error: 'Contractor not found' }, { status: 404 });
@@ -54,7 +71,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (category === 'CONTRACTOR_FAULT' && !photos) {
-      return NextResponse.json({ error: 'Photos are required for contractor fault reports' }, { status: 400 });
+      return NextResponse.json({ 
+        error: 'Photos are required for contractor fault reports' 
+      }, { status: 400 });
     }
 
     // Calculate penalty for contractor fault
@@ -74,31 +93,40 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      await db.contractorRating.update({
-        where: { contractorId },
-        data: {
-          overallRating: Math.max(0, contract.contractor!.contractorRating.overallRating - penalty),
-          durabilityScore: Math.max(0, contract.contractor!.contractorRating.durabilityScore - penalty * 0.5),
-          pointsLost: contract.contractor!.contractorRating.pointsLost + penalty,
-          isBelowMinimum: Math.max(0, contract.contractor!.contractorRating.overallRating - penalty) < 3.8,
-          lastUpdated: new Date()
-        }
-      });
+      // Check if contractor rating exists
+      const contractorRating = contract.contractor?.contractorRating;
+      
+      if (contractorRating) {
+        const newOverallRating = Math.max(0, contractorRating.overallRating - penalty);
+        const newDurabilityScore = Math.max(0, contractorRating.durabilityScore - penalty * 0.5);
+        const isBelowMinimum = newOverallRating < 3.8;
 
-      await db.contractorProgress.update({
-        where: { contractorId },
-        data: {
-          currentRating: Math.max(0, contract.contractor!.contractorRating.overallRating - penalty),
-          canBidMedium: Math.max(0, contract.contractor!.contractorRating.overallRating - penalty) >= 3.8,
-          canBidLarge: Math.max(0, contract.contractor!.contractorRating.overallRating - penalty) >= 4.0,
-          canBidSmall: Math.max(0, contract.contractor!.contractorRating.overallRating - penalty) >= 3.8,
-          isSuspended: Math.max(0, contract.contractor!.contractorRating.overallRating - penalty) < 3.8,
-          suspendedReason: Math.max(0, contract.contractor!.contractorRating.overallRating - penalty) < 3.8
-            ? 'Rating below minimum threshold of 3.8 due to quality issues'
-            : null,
-          lastUpdated: new Date()
-        }
-      });
+        await db.contractorRating.update({
+          where: { contractorId },
+          data: {
+            overallRating: newOverallRating,
+            durabilityScore: newDurabilityScore,
+            pointsLost: contractorRating.pointsLost + penalty,
+            isBelowMinimum,
+            lastUpdated: new Date()
+          }
+        });
+
+        await db.contractorProgress.update({
+          where: { contractorId },
+          data: {
+            currentRating: newOverallRating,
+            canBidMedium: newOverallRating >= 3.8,
+            canBidLarge: newOverallRating >= 4.0,
+            canBidSmall: newOverallRating >= 3.8,
+            isSuspended: isBelowMinimum,
+            suspendedReason: isBelowMinimum
+              ? 'Rating below minimum threshold of 3.8 due to quality issues'
+              : null,
+            lastUpdated: new Date()
+          }
+        });
+      }
     }
 
     const issueReport = await db.issueReport.create({
@@ -129,6 +157,7 @@ export async function POST(request: NextRequest) {
     }, { status: 201 });
 
   } catch (error) {
+    console.error('Error submitting issue report:', error);
     return NextResponse.json({ error: 'Failed to submit issue report' }, { status: 500 });
   }
 }
@@ -156,7 +185,24 @@ export async function PATCH(request: NextRequest) {
 
     // Only natural disaster issues can be forgiven
     if (issue.category !== 'NATURAL_DISASTER') {
-      return NextResponse.json({ error: 'Only natural disaster issues can be forgiven' }, { status: 400 });
+      return NextResponse.json({ 
+        error: 'Only natural disaster issues can be forgiven' 
+      }, { status: 400 });
+    }
+
+    // Check if contractor and rating exist
+    if (!issue.contractor) {
+      return NextResponse.json({ 
+        error: 'Contractor not found for this issue' 
+      }, { status: 404 });
+    }
+
+    const currentRating = issue.contractor.contractorRating;
+
+    if (!currentRating) {
+      return NextResponse.json({ 
+        error: 'Contractor rating not found' 
+      }, { status: 404 });
     }
 
     if (forgive) {
@@ -179,16 +225,18 @@ export async function PATCH(request: NextRequest) {
     } else {
       // Reject forgiveness - treat as contractor fault
       const penalty = calculateIssuePenalty('CONTRACTOR_FAULT', issue.severity);
-      const currentRating = issue.contractor!.contractorRating;
+      const newOverallRating = Math.max(0, currentRating.overallRating - penalty);
+      const newDurabilityScore = Math.max(0, currentRating.durabilityScore - penalty * 0.5);
+      const isBelowMinimum = newOverallRating < 3.8;
 
       await db.contractorRating.update({
         where: { contractorId: issue.contractorId },
         data: {
-          overallRating: Math.max(0, currentRating.overallRating - penalty),
-          durabilityScore: Math.max(0, currentRating.durabilityScore - penalty * 0.5),
+          overallRating: newOverallRating,
+          durabilityScore: newDurabilityScore,
           pointsLost: currentRating.pointsLost + penalty,
           forgivenessCount: currentRating.forgivenessCount + 1,
-          isBelowMinimum: Math.max(0, currentRating.overallRating - penalty) < 3.8,
+          isBelowMinimum,
           lastUpdated: new Date()
         }
       });
@@ -196,11 +244,14 @@ export async function PATCH(request: NextRequest) {
       await db.contractorProgress.update({
         where: { contractorId: issue.contractorId },
         data: {
-          currentRating: Math.max(0, currentRating.overallRating - penalty),
-          canBidMedium: Math.max(0, currentRating.overallRating - penalty) >= 3.8,
-          canBidLarge: Math.max(0, currentRating.overallRating - penalty) >= 4.0,
-          canBidSmall: Math.max(0, currentRating.overallRating - penalty) >= 3.8,
-          isSuspended: Math.max(0, currentRating.overallRating - penalty) < 3.8,
+          currentRating: newOverallRating,
+          canBidMedium: newOverallRating >= 3.8,
+          canBidLarge: newOverallRating >= 4.0,
+          canBidSmall: newOverallRating >= 3.8,
+          isSuspended: isBelowMinimum,
+          suspendedReason: isBelowMinimum
+            ? 'Rating below minimum threshold of 3.8 due to rejected forgiveness request'
+            : null,
           lastUpdated: new Date()
         }
       });
@@ -218,12 +269,16 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({
         success: true,
         message: 'Forgiveness rejected. Penalty applied to contractor rating.',
-        penalty
+        penalty,
+        newRating: newOverallRating
       });
     }
 
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to review forgiveness request' }, { status: 500 });
+    console.error('Error reviewing forgiveness request:', error);
+    return NextResponse.json({ 
+      error: 'Failed to review forgiveness request' 
+    }, { status: 500 });
   }
 }
 
@@ -260,6 +315,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ success: true, issues });
   } catch (error) {
+    console.error('Error fetching issue reports:', error);
     return NextResponse.json({ error: 'Failed to fetch issue reports' }, { status: 500 });
   }
 }

@@ -73,37 +73,37 @@ export default function CitizenDashboard({ user, onLogout }: Props) {
   }, [user.id]);
 
   const handleVerifyNid = async () => {
-  if (!nidInput) {
-    alert('Please enter your NID/Citizenship number');
-    return;
-  }
-
-  const nidRegex = /^\d{1,2}-\d{1,2}-\d{5}$/;
-  if (!nidRegex.test(nidInput)) {
-    alert('Invalid NID format. Format: District-Ward-Number (e.g., 12-34-56789)');
-    return;
-  }
-
-  try {
-    const response = await fetch('/api/users', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: user.id, nidNumber: nidInput })
-    });
-
-    const result = await response.json();
-    if (result.success) {
-      user.nidNumber = nidInput;
-      setIsVerified(true);
-      await loadPublicData();
-    } else {
-      alert(result.error || 'Failed to verify NID');
+    if (!nidInput) {
+      alert('Please enter your NID/Citizenship number');
+      return;
     }
-  } catch (error) {
-    console.error('NID verification error:', error);
-    alert('Failed to verify NID. Please try again.');
-  }
-};
+
+    const nidRegex = /^\d{1,2}-\d{1,2}-\d{5}$/;
+    if (!nidRegex.test(nidInput)) {
+      alert('Invalid NID format. Format: District-Ward-Number (e.g., 12-34-56789)');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/users', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user.id, nidNumber: nidInput })
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        user.nidNumber = nidInput;
+        setIsVerified(true);
+        await loadPublicData();
+      } else {
+        alert(result.error || 'Failed to verify NID');
+      }
+    } catch (error) {
+      console.error('NID verification error:', error);
+      alert('Failed to verify NID. Please try again.');
+    }
+  };
 
   const loadPublicData = async () => {
     setLoading(true);
@@ -333,11 +333,12 @@ export default function CitizenDashboard({ user, onLogout }: Props) {
             </div>
 
             <Tabs defaultValue="reports" className="space-y-6">
-              <TabsList className="grid w-full grid-cols-4 lg:w-auto">
+              <TabsList className="grid w-full grid-cols-5 lg:w-auto">
                 <TabsTrigger value="reports">Work Reports</TabsTrigger>
                 <TabsTrigger value="payments">Payments</TabsTrigger>
                 <TabsTrigger value="plans">Daily Plans</TabsTrigger>
                 <TabsTrigger value="contractors">Contractors</TabsTrigger>
+                <TabsTrigger value="actions">Rate & Report</TabsTrigger>
               </TabsList>
 
               <TabsContent value="reports">
@@ -358,9 +359,9 @@ export default function CitizenDashboard({ user, onLogout }: Props) {
                             <TableRow>
                               <TableHead>Date</TableHead>
                               <TableHead>Contract</TableHead>
+                              <TableHead>Contractor</TableHead>
                               <TableHead>Work Summary</TableHead>
                               <TableHead>Hours</TableHead>
-                              <TableHead>Workers</TableHead>
                               <TableHead>Progress</TableHead>
                             </TableRow>
                           </TableHeader>
@@ -370,11 +371,10 @@ export default function CitizenDashboard({ user, onLogout }: Props) {
                                 <TableCell className="font-medium">
                                   {new Date(report.reportDate).toLocaleDateString()}
                                 </TableCell>
-                                <TableCell>{report.contract.title}</TableCell>
-                                <TableCell>{report.contractor.name}</TableCell>
+                                <TableCell>{report.contract?.title}</TableCell>
+                                <TableCell>{report.contractor?.name}</TableCell>
                                 <TableCell className="max-w-xs truncate">{report.workSummary}</TableCell>
                                 <TableCell>{report.hoursWorked}</TableCell>
-                                <TableCell>{report.workersUsed}</TableCell>
                                 <TableCell>{report.progress}%</TableCell>
                               </TableRow>
                             ))}
@@ -390,8 +390,8 @@ export default function CitizenDashboard({ user, onLogout }: Props) {
                 <div className="space-y-4">
                   <Card>
                     <CardHeader>
-                        <CardTitle>Payment Transactions</CardTitle>
-                        <CardDescription>Track government payments made to contractors</CardDescription>
+                      <CardTitle>Payment Transactions</CardTitle>
+                      <CardDescription>Track government payments made to contractors</CardDescription>
                     </CardHeader>
                     <CardContent>
                       {loading ? (
@@ -418,8 +418,8 @@ export default function CitizenDashboard({ user, onLogout }: Props) {
                                   <TableCell className="font-medium">
                                     {new Date(payment.createdAt).toLocaleDateString()}
                                   </TableCell>
-                                  <TableCell>{payment.contract.title}</TableCell>
-                                  <TableCell>{payment.requester.name}</TableCell>
+                                  <TableCell>{payment.contract?.title}</TableCell>
+                                  <TableCell>{payment.requester?.name}</TableCell>
                                   <TableCell className="font-semibold">
                                     Rs. {payment.amount.toLocaleString()}
                                   </TableCell>
@@ -431,7 +431,7 @@ export default function CitizenDashboard({ user, onLogout }: Props) {
                                         payment.status === 'PAID' ? 'default' :
                                         payment.status === 'APPROVED' ? 'secondary' :
                                         payment.status === 'PENDING' ? 'outline' :
-                                          'destructive'
+                                        'destructive'
                                       }
                                     >
                                       {payment.status}
@@ -451,8 +451,8 @@ export default function CitizenDashboard({ user, onLogout }: Props) {
               <TabsContent value="plans">
                 <Card>
                   <CardHeader>
-                        <CardTitle>Contractor Daily Plans</CardTitle>
-                        <CardDescription>Access daily work plans submitted by contractors</CardDescription>
+                    <CardTitle>Contractor Daily Plans</CardTitle>
+                    <CardDescription>Access daily work plans submitted by contractors</CardDescription>
                   </CardHeader>
                   <CardContent>
                     {loading ? (
@@ -478,13 +478,13 @@ export default function CitizenDashboard({ user, onLogout }: Props) {
                                 <TableCell className="font-medium">
                                   {new Date(plan.planDate).toLocaleDateString()}
                                 </TableCell>
-                                <TableCell>{plan.contract.title}</TableCell>
-                                <TableCell>{plan.contractor.name}</TableCell>
+                                <TableCell>{plan.contract?.title}</TableCell>
+                                <TableCell>{plan.contractor?.name}</TableCell>
                                 <TableCell className="max-w-xs truncate">{plan.plannedWork}</TableCell>
                                 <TableCell>{plan.workers}</TableCell>
                                 <TableCell>
-                                  <Badge variant={plan.workReports.length > 0 ? 'default' : 'outline'}>
-                                    {plan.workReports.length > 0 ? 'Submitted' : 'Pending'}
+                                  <Badge variant={plan.workReports?.length > 0 ? 'default' : 'outline'}>
+                                    {plan.workReports?.length > 0 ? 'Submitted' : 'Pending'}
                                   </Badge>
                                 </TableCell>
                               </TableRow>
@@ -500,8 +500,8 @@ export default function CitizenDashboard({ user, onLogout }: Props) {
               <TabsContent value="contractors">
                 <Card>
                   <CardHeader>
-                        <CardTitle>Contractors List</CardTitle>
-                        <CardDescription>View all registered contractors and their ratings</CardDescription>
+                    <CardTitle>Contractors List</CardTitle>
+                    <CardDescription>View all registered contractors and their ratings</CardDescription>
                   </CardHeader>
                   <CardContent>
                     {loading ? (
@@ -529,8 +529,8 @@ export default function CitizenDashboard({ user, onLogout }: Props) {
                                     <Badge
                                       variant={
                                         contractor.contractorRating.overallRating >= 4.0 ? 'default' :
-                                          contractor.contractorRating.overallRating >= 3.8 ? 'secondary' :
-                                            'outline'
+                                        contractor.contractorRating.overallRating >= 3.8 ? 'secondary' :
+                                        'outline'
                                       }
                                     >
                                       {contractor.contractorRating.overallRating.toFixed(2)}/5.0
@@ -562,8 +562,8 @@ export default function CitizenDashboard({ user, onLogout }: Props) {
                 <div className="space-y-4">
                   <Card>
                     <CardHeader>
-                          <CardTitle>Rate Contractor</CardTitle>
-                          <CardDescription>Rate contractor work quality. For negative ratings, proof is required.</CardDescription>
+                      <CardTitle>Rate Contractor</CardTitle>
+                      <CardDescription>Rate contractor work quality. For negative ratings, proof is required.</CardDescription>
                     </CardHeader>
                     <CardContent>
                       <form onSubmit={handleSubmitRating} className="space-y-4">
@@ -572,15 +572,22 @@ export default function CitizenDashboard({ user, onLogout }: Props) {
                             <Label>Contract</Label>
                             <Select
                               value={ratingForm.contractId}
-                              onValueChange={(value) => setRatingForm({ ...ratingForm, contractId: value })}
+                              onValueChange={(value) => {
+                                const selectedPlan = dailyPlans.find((p: any) => p.contract?.id === value);
+                                setRatingForm({ 
+                                  ...ratingForm, 
+                                  contractId: value,
+                                  contractorId: selectedPlan?.contractor?.id || ''
+                                });
+                              }}
                             >
                               <SelectTrigger>
                                 <SelectValue placeholder="Select contract" />
                               </SelectTrigger>
                               <SelectContent>
                                 {dailyPlans.map((plan: any) => (
-                                  <SelectItem key={plan.contract.id} value={plan.contract.id}>
-                                    {plan.contract.title}
+                                  <SelectItem key={plan.contract?.id} value={plan.contract?.id}>
+                                    {plan.contract?.title}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
@@ -649,11 +656,11 @@ export default function CitizenDashboard({ user, onLogout }: Props) {
                         <div className="p-4 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg">
                           <p className="text-sm text-amber-800 dark:text-amber-200">
                             <AlertCircle className="h-4 w-4 inline mr-2" />
-                            <strong>Note:</strong> For negative ratings, you must provide photo/video evidence and explain why the rating is low.
+                            <strong>Note:</strong> For negative ratings (below 3.0), you must provide photo/video evidence and explain why the rating is low.
                           </p>
                         </div>
                         <div className="space-y-2">
-                          <Label>Proof URL</Label>
+                          <Label>Proof URL (Required for ratings below 3.0)</Label>
                           <Input
                             value={ratingForm.proofUrl}
                             onChange={(e) => setRatingForm({ ...ratingForm, proofUrl: e.target.value })}
@@ -677,8 +684,8 @@ export default function CitizenDashboard({ user, onLogout }: Props) {
 
                   <Card>
                     <CardHeader>
-                          <CardTitle>Report Issue</CardTitle>
-                          <CardDescription>Report work issues. Natural disasters can be forgiven. Contractor faults will affect rating.</CardDescription>
+                      <CardTitle>Report Issue</CardTitle>
+                      <CardDescription>Report work issues. Natural disasters can be forgiven. Contractor faults will affect rating.</CardDescription>
                     </CardHeader>
                     <CardContent>
                       <form onSubmit={handleSubmitIssue} className="space-y-4">
@@ -686,18 +693,25 @@ export default function CitizenDashboard({ user, onLogout }: Props) {
                           <Label>Contract</Label>
                           <Select
                             value={issueForm.contractId}
-                            onValueChange={(value) => setIssueForm({ ...issueForm, contractId: value })}
+                            onValueChange={(value) => {
+                              const selectedPlan = dailyPlans.find((p: any) => p.contract?.id === value);
+                              setIssueForm({ 
+                                ...issueForm, 
+                                contractId: value,
+                                contractorId: selectedPlan?.contractor?.id || ''
+                              });
+                            }}
                           >
                             <SelectTrigger>
                               <SelectValue placeholder="Select contract" />
                             </SelectTrigger>
                             <SelectContent>
                               {dailyPlans.map((plan: any) => (
-                                  <SelectItem key={plan.contract.id} value={plan.contract.id}>
-                                    {plan.contract.title}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
+                                <SelectItem key={plan.contract?.id} value={plan.contract?.id}>
+                                  {plan.contract?.title}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
                           </Select>
                         </div>
                         <div className="space-y-2">
@@ -720,19 +734,10 @@ export default function CitizenDashboard({ user, onLogout }: Props) {
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="NATURAL_DISASTER">Natural Disaster (Forgivable)</SelectItem>
-                                <SelectItem value="CONTRACTOR_FAULT">Contractor Fault (Penalty)</SelectItem>
+                                <SelectItem value="NATURAL_DISASTER">Natural Disaster</SelectItem>
+                                <SelectItem value="CONTRACTOR_FAULT">Contractor Fault</SelectItem>
                               </SelectContent>
                             </Select>
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Issue Type</Label>
-                            <Input
-                              value={issueForm.issueType}
-                              onChange={(e) => setIssueForm({ ...issueForm, issueType: e.target.value })}
-                              placeholder="e.g., Cracks, Holes, Drainage, Landslide"
-                              required
-                            />
                           </div>
                           <div className="space-y-2">
                             <Label>Severity</Label>
@@ -752,22 +757,42 @@ export default function CitizenDashboard({ user, onLogout }: Props) {
                             </Select>
                           </div>
                         </div>
-                        <div className="space-y-2">
-                          <Label>Date</Label>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label>Issue Date</Label>
                             <Input
                               type="date"
                               value={issueForm.issueDate}
                               onChange={(e) => setIssueForm({ ...issueForm, issueDate: e.target.value })}
                               required
                             />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Issue Type</Label>
+                            <Select
+                              value={issueForm.issueType}
+                              onValueChange={(value) => setIssueForm({ ...issueForm, issueType: value })}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select type" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="QUALITY">Quality Issue</SelectItem>
+                                <SelectItem value="SAFETY">Safety Concern</SelectItem>
+                                <SelectItem value="DELAY">Delay</SelectItem>
+                                <SelectItem value="DAMAGE">Damage</SelectItem>
+                                <SelectItem value="OTHER">Other</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
                         </div>
                         <div className="space-y-2">
-                          <Label>Location (Optional)</Label>
-                            <Input
-                              value={issueForm.location}
-                              onChange={(e) => setIssueForm({ ...issueForm, location: e.target.value })}
-                              placeholder="e.g., Ward 5, Kathmandu"
-                            />
+                          <Label>Location</Label>
+                          <Input
+                            value={issueForm.location}
+                            onChange={(e) => setIssueForm({ ...issueForm, location: e.target.value })}
+                            placeholder="e.g., Main road near school"
+                          />
                         </div>
                         <div className="space-y-2">
                           <Label>Description</Label>
@@ -778,19 +803,24 @@ export default function CitizenDashboard({ user, onLogout }: Props) {
                             required
                           />
                         </div>
-                        <div className="p-4 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
-                          <p className="text-sm text-blue-800 dark:text-blue-200">
-                            <AlertCircle className="h-4 w-4 inline mr-2" />
-                            <strong>Landslide Example:</strong> If a landslide damaged the road (unavoidable natural disaster), select "Natural Disaster" and it can be forgiven with no rating penalty.
-                          </p>
-                        </div>
-                        <div className="p-4 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg">
-                          <p className="text-sm text-red-800 dark:text-red-200">
-                            <AlertCircle className="h-4 w-4 inline mr-2" />
-                            <strong>Drainage Example:</strong> If heavy rainfall caused water to collect on the road (poor drainage design), select "Contractor Fault" and the contractor's rating will be penalized.
-                          </p>
-                        </div>
-                        <Button type="submit" className="w-full bg-cyan-600 hover:bg-cyan-700">
+                        {issueForm.category === 'NATURAL_DISASTER' && (
+                          <div className="p-4 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg">
+                            <p className="text-sm text-blue-800 dark:text-blue-200">
+                              <CheckCircle className="h-4 w-4 inline mr-2" />
+                              <strong>Natural Disaster:</strong> This issue will be reviewed by government officials for forgiveness eligibility. The contractor's rating will not be affected if approved.
+                            </p>
+                          </div>
+                        )}
+                        {issueForm.category === 'CONTRACTOR_FAULT' && (
+                          <div className="p-4 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg">
+                            <p className="text-sm text-red-800 dark:text-red-200">
+                              <AlertCircle className="h-4 w-4 inline mr-2" />
+                              <strong>Contractor Fault:</strong> This issue will directly affect the contractor's rating and may result in penalties.
+                            </p>
+                          </div>
+                        )}
+                        <Button type="submit" className="w-full bg-red-600 hover:bg-red-700">
+                          <AlertCircle className="h-4 w-4 mr-2" />
                           Submit Issue Report
                         </Button>
                       </form>
@@ -798,15 +828,14 @@ export default function CitizenDashboard({ user, onLogout }: Props) {
                   </Card>
                 </div>
               </TabsContent>
-
             </Tabs>
           </main>
 
           <footer className="border-t bg-white dark:bg-gray-900 mt-auto">
             <div className="container mx-auto px-4 py-6">
               <div className="text-sm text-gray-600 dark:text-gray-400 text-center">
-                    © 2025 Payment Delay Tracker. Citizen Dashboard.
-                  </div>
+                © 2025 Payment Delay Tracker. Citizen Dashboard.
+              </div>
             </div>
           </footer>
         </>
