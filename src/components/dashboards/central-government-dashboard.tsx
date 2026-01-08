@@ -16,21 +16,27 @@ import {
 import {
   Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle
 } from '@/components/ui/dialog';
+import {
+  Alert, AlertDescription
+} from '@/components/ui/alert';
 import { 
   Wallet, FileText, ClipboardList, DollarSign, LogOut, Plus, FileCheck, 
   Calendar, UserPlus, Star, Building2, TrendingUp, Shield, AlertTriangle,
   CheckCircle, XCircle, Eye, BarChart3, MapPin, Users, Briefcase,
-  Landmark, PieChart, ArrowUpRight, ArrowDownRight, Clock, ThumbsUp, ThumbsDown
+  Landmark, PieChart, ArrowUpRight, ArrowDownRight, Clock, ThumbsUp, ThumbsDown,
+  Info
 } from 'lucide-react';
 
 // User roles for Central Government
 type CentralGovRole = 'PM' | 'FINANCE_MINISTRY' | 'INFRASTRUCTURE_MINISTRY';
+type GovernmentLevel = 'CENTRAL' | 'PROVINCIAL' | 'LOCAL';
 
 interface User {
   id: string;
   name: string;
   role: CentralGovRole;
   ministry?: string;
+  governmentLevel?: GovernmentLevel;
 }
 
 interface Props {
@@ -56,6 +62,8 @@ interface Project {
   title: string;
   description: string;
   budget: number;
+  size: 'SMALL' | 'MEDIUM' | 'LARGE';
+  createdBy: 'CENTRAL' | 'PROVINCIAL' | 'LOCAL';
   spentAmount: number;
   status: string;
   priority: string;
@@ -69,7 +77,6 @@ interface Project {
   progress: number;
   startDate: string;
   endDate: string;
-  size: string;
 }
 
 interface BudgetAllocation {
@@ -94,13 +101,70 @@ interface PolicyDecision {
   impact: string;
 }
 
+// PROJECT SIZE VALIDATION FUNCTIONS
+const getProjectSizesByLevel = (level: GovernmentLevel): ('SMALL' | 'MEDIUM' | 'LARGE')[] => {
+  switch (level) {
+    case 'CENTRAL':
+      return ['SMALL', 'MEDIUM', 'LARGE'];
+    case 'PROVINCIAL':
+      return ['SMALL', 'MEDIUM'];
+    case 'LOCAL':
+      return ['SMALL'];
+    default:
+      return [];
+  }
+};
+
+const getProjectSizeBudgetRange = (size: 'SMALL' | 'MEDIUM' | 'LARGE') => {
+  switch (size) {
+    case 'SMALL':
+      return { min: 1000000, max: 100000000, label: 'Rs. 10 Lakh - 10 Crore' };
+    case 'MEDIUM':
+      return { min: 100000000, max: 5000000000, label: 'Rs. 10 Crore - 500 Crore' };
+    case 'LARGE':
+      return { min: 5000000000, max: 50000000000, label: 'Rs. 500 Crore - 5000 Crore' };
+  }
+};
+
+const canCreateProjectSize = (
+  userLevel: GovernmentLevel,
+  projectSize: 'SMALL' | 'MEDIUM' | 'LARGE'
+): boolean => {
+  const allowedSizes = getProjectSizesByLevel(userLevel);
+  return allowedSizes.includes(projectSize);
+};
+
+const validateProjectBudget = (
+  size: 'SMALL' | 'MEDIUM' | 'LARGE',
+  budget: number
+): { valid: boolean; message?: string } => {
+  const range = getProjectSizeBudgetRange(size);
+  
+  if (budget < range.min) {
+    return {
+      valid: false,
+      message: `Budget too low for ${size} project. Minimum: ${formatCurrency(range.min)}`
+    };
+  }
+  
+  if (budget > range.max) {
+    return {
+      valid: false,
+      message: `Budget too high for ${size} project. Maximum: ${formatCurrency(range.max)}`
+    };
+  }
+  
+  return { valid: true };
+};
+
 export default function CentralGovernmentDashboard({ user, onLogout }: Props) {
   // Default user for demo purposes
   const defaultUser: User = {
     id: '1',
     name: 'Demo User',
     role: 'PM',
-    ministry: 'Prime Minister Office'
+    ministry: 'Prime Minister Office',
+    governmentLevel: 'CENTRAL'
   };
   
   const currentUser = user || defaultUser;
@@ -109,14 +173,14 @@ export default function CentralGovernmentDashboard({ user, onLogout }: Props) {
   const [loading, setLoading] = useState(true);
   const [activeRole, setActiveRole] = useState<CentralGovRole>(currentUser.role);
   const [nationalStats, setNationalStats] = useState<NationalStats>({
-    totalBudget: 0,
-    allocatedBudget: 0,
-    spentBudget: 0,
-    totalProjects: 0,
-    completedProjects: 0,
-    ongoingProjects: 0,
-    delayedProjects: 0,
-    totalContractors: 0,
+    totalBudget: 150000000000,
+    allocatedBudget: 100000000000,
+    spentBudget: 45000000000,
+    totalProjects: 1247,
+    completedProjects: 342,
+    ongoingProjects: 765,
+    delayedProjects: 140,
+    totalContractors: 523,
     provinces: 7,
     localUnits: 753
   });
@@ -132,6 +196,7 @@ export default function CentralGovernmentDashboard({ user, onLogout }: Props) {
   const [projectDetailModalOpen, setProjectDetailModalOpen] = useState(false);
   const [allocationModalOpen, setAllocationModalOpen] = useState(false);
   const [policyModalOpen, setPolicyModalOpen] = useState(false);
+  const [createProjectModalOpen, setCreateProjectModalOpen] = useState(false);
 
   const [allocationForm, setAllocationForm] = useState({
     recipient: '',
@@ -148,6 +213,20 @@ export default function CentralGovernmentDashboard({ user, onLogout }: Props) {
     impact: ''
   });
 
+  const [projectForm, setProjectForm] = useState({
+    title: '',
+    description: '',
+    budget: '',
+    size: '' as 'SMALL' | 'MEDIUM' | 'LARGE' | '',
+    priority: 'MEDIUM',
+    province: '',
+    localUnit: '',
+    startDate: '',
+    endDate: ''
+  });
+
+  const [projectValidationError, setProjectValidationError] = useState<string>('');
+
   useEffect(() => {
     loadDashboardData();
   }, []);
@@ -155,91 +234,50 @@ export default function CentralGovernmentDashboard({ user, onLogout }: Props) {
   const loadDashboardData = async () => {
     setLoading(true);
     try {
-      // Check if running in development/demo mode
-      const isDemoMode = true; // Set to false when you have real API endpoints
-      
-      if (isDemoMode) {
-        // Use demo data directly
-        throw new Error('Demo mode - using static data');
-      }
-
-      const [statsRes, projectsRes, allocationsRes, policiesRes, paymentsRes, qualityRes, contractorsRes] = await Promise.all([
-        fetch('/api/central/stats'),
-        fetch('/api/central/projects'),
-        fetch('/api/central/allocations'),
-        fetch('/api/central/policies'),
-        fetch('/api/central/payments'),
-        fetch('/api/central/quality-reports'),
-        fetch('/api/contractors')
-      ]);
-
-      // Check if responses are ok
-      if (!statsRes.ok) throw new Error('Stats API failed');
-      if (!projectsRes.ok) throw new Error('Projects API failed');
-
-      const statsData = await statsRes.json();
-      const projectsData = await projectsRes.json();
-      const allocationsData = await allocationsRes.json();
-      const policiesData = await policiesRes.json();
-      const paymentsData = await paymentsRes.json();
-      const qualityData = await qualityRes.json();
-      const contractorsData = await contractorsRes.json();
-
-      setNationalStats(statsData.stats || nationalStats);
-      setProjects(projectsData.projects || []);
-      setBudgetAllocations(allocationsData.allocations || []);
-      setPolicyDecisions(policiesData.policies || []);
-      setPaymentRequests(paymentsData.payments || []);
-      setQualityReports(qualityData.reports || []);
-      setContractors(contractorsData.contractors || []);
-    } catch (err) {
-      console.error('Failed to load dashboard data, using demo data:', err);
-      // Set demo data for preview
-      setNationalStats({
-        totalBudget: 500000000000,
-        allocatedBudget: 350000000000,
-        spentBudget: 180000000000,
-        totalProjects: 1250,
-        completedProjects: 420,
-        ongoingProjects: 680,
-        delayedProjects: 150,
-        totalContractors: 856,
-        provinces: 7,
-        localUnits: 753
-      });
+      console.log('Using demo data');
       
       setProjects([
         {
           id: '1',
           title: 'Kathmandu-Terai Fast Track',
-          description: 'Major highway connecting Kathmandu to Terai region',
-          budget: 15000000000,
-          spentAmount: 8500000000,
+          description: 'High-speed highway connecting Kathmandu to southern plains',
+          budget: 45000000000,
+          size: 'LARGE',
+          createdBy: 'CENTRAL',
+          spentAmount: 28000000000,
           status: 'IN_PROGRESS',
           priority: 'HIGH',
           province: 'Bagmati',
-          localUnit: 'Multiple',
-          contractor: { name: 'ABC Construction', company: 'ABC Infra Pvt Ltd', rating: 4.5 },
-          progress: 56,
-          startDate: '2022-01-15',
+          localUnit: 'Multiple Districts',
+          progress: 62,
+          startDate: '2021-01-15',
           endDate: '2025-12-31',
-          size: 'LARGE'
+          contractor: {
+            name: 'Ram Kumar Shrestha',
+            company: 'Nepal Infrastructure Corp',
+            rating: 4.5
+          }
         },
         {
           id: '2',
-          title: 'Pokhara International Airport Phase 2',
-          description: 'Expansion of Pokhara International Airport',
-          budget: 8000000000,
-          spentAmount: 2000000000,
-          status: 'IN_PROGRESS',
+          title: 'Pokhara International Airport',
+          description: 'International airport development project',
+          budget: 25000000000,
+          size: 'LARGE',
+          createdBy: 'CENTRAL',
+          spentAmount: 25000000000,
+          status: 'COMPLETED',
           priority: 'HIGH',
           province: 'Gandaki',
           localUnit: 'Pokhara Metropolitan',
-          contractor: { name: 'XYZ Builders', company: 'XYZ Construction', rating: 4.2 },
-          progress: 25,
-          startDate: '2023-06-01',
-          endDate: '2026-06-30',
-          size: 'LARGE'
+          progress: 100,
+          startDate: '2016-04-01',
+          endDate: '2023-01-01',
+          contractor: {
+            name: 'Sita Devi Tamang',
+            company: 'China CAMC Engineering',
+            rating: 4.2
+          }
         }
       ]);
 
@@ -290,6 +328,8 @@ export default function CentralGovernmentDashboard({ user, onLogout }: Props) {
           requestDate: '2024-01-10'
         }
       ]);
+    } catch (err) {
+      console.error('Error loading data:', err);
     } finally {
       setLoading(false);
     }
@@ -327,6 +367,70 @@ export default function CentralGovernmentDashboard({ user, onLogout }: Props) {
     } catch (error) {
       console.error('Allocation error:', error);
       alert('Failed to allocate budget. Please try again.');
+    }
+  };
+
+  const handleCreateProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setProjectValidationError('');
+
+    // Validate project size is allowed for Central government
+    if (!projectForm.size) {
+      setProjectValidationError('Please select a project size');
+      return;
+    }
+
+    if (!canCreateProjectSize('CENTRAL', projectForm.size)) {
+      setProjectValidationError(`Central Government cannot create ${projectForm.size} projects`);
+      return;
+    }
+
+    // Validate budget matches project size
+    const budgetValidation = validateProjectBudget(
+      projectForm.size,
+      parseFloat(projectForm.budget)
+    );
+
+    if (!budgetValidation.valid) {
+      setProjectValidationError(budgetValidation.message || 'Invalid budget');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/central/projects', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...projectForm,
+          budget: parseFloat(projectForm.budget),
+          createdBy: 'CENTRAL',
+          createdById: currentUser.id
+        })
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        alert('Project created successfully!');
+        setCreateProjectModalOpen(false);
+        setProjectForm({
+          title: '',
+          description: '',
+          budget: '',
+          size: '',
+          priority: 'MEDIUM',
+          province: '',
+          localUnit: '',
+          startDate: '',
+          endDate: ''
+        });
+        await loadDashboardData();
+      } else {
+        setProjectValidationError(result.error || 'Failed to create project');
+      }
+    } catch (error) {
+      console.error('Project creation error:', error);
+      setProjectValidationError('Failed to create project. Please try again.');
     }
   };
 
@@ -555,11 +659,19 @@ export default function CentralGovernmentDashboard({ user, onLogout }: Props) {
       <TabsContent value="projects">
         <Card className="border-0 shadow-lg">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Star className="h-5 w-5 text-purple-600" />
-              National Priority Projects
-            </CardTitle>
-            <CardDescription>High priority infrastructure projects across Nepal</CardDescription>
+            <div className="flex justify-between items-center">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Star className="h-5 w-5 text-purple-600" />
+                  National Priority Projects
+                </CardTitle>
+                <CardDescription>High priority infrastructure projects across Nepal</CardDescription>
+              </div>
+              <Button onClick={() => setCreateProjectModalOpen(true)} className="bg-purple-600 hover:bg-purple-700">
+                <Plus className="h-4 w-4 mr-2" />
+                Create Project
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -638,7 +750,7 @@ export default function CentralGovernmentDashboard({ user, onLogout }: Props) {
         <Card className="border-0 shadow-lg">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-purple-600" />
+                            <Shield className="h-5 w-5 text-purple-600" />
               Pending Policy Decisions
             </CardTitle>
             <CardDescription>Review and approve policy proposals</CardDescription>
@@ -714,23 +826,51 @@ export default function CentralGovernmentDashboard({ user, onLogout }: Props) {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {['Koshi', 'Madhesh', 'Bagmati', 'Gandaki', 'Lumbini', 'Karnali', 'Sudurpashchim'].map((province, index) => (
-                <div key={province} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-                  <h4 className="font-semibold">{province} Province</h4>
-                  <div className="mt-2 space-y-2">
+              {[
+                { name: 'Koshi', projects: 156, utilization: 65, completion: 42 },
+                { name: 'Madhesh', projects: 189, utilization: 58, completion: 35 },
+                { name: 'Bagmati', projects: 245, utilization: 72, completion: 48 },
+                { name: 'Gandaki', projects: 134, utilization: 61, completion: 39 },
+                { name: 'Lumbini', projects: 178, utilization: 55, completion: 32 },
+                { name: 'Karnali', projects: 98, utilization: 48, completion: 28 },
+                { name: 'Sudurpashchim', projects: 112, utilization: 52, completion: 31 }
+              ].map((province) => (
+                <div key={province.name} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:shadow-md transition-shadow">
+                  <h4 className="font-semibold text-lg">{province.name} Province</h4>
+                  <div className="mt-3 space-y-3">
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Projects</span>
-                      <span>{Math.floor(Math.random() * 200) + 50}</span>
+                      <span className="text-gray-500">Total Projects</span>
+                      <span className="font-medium">{province.projects}</span>
                     </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Budget Utilized</span>
-                      <span>{Math.floor(Math.random() * 40) + 40}%</span>
+                    <div>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-gray-500">Budget Utilized</span>
+                        <span className="font-medium">{province.utilization}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-blue-600 h-2 rounded-full" 
+                          style={{ width: `${province.utilization}%` }}
+                        ></div>
+                      </div>
                     </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Completion Rate</span>
-                      <span>{Math.floor(Math.random() * 30) + 30}%</span>
+                    <div>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-gray-500">Completion Rate</span>
+                        <span className="font-medium">{province.completion}%</span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className="bg-green-600 h-2 rounded-full" 
+                          style={{ width: `${province.completion}%` }}
+                        ></div>
+                      </div>
                     </div>
                   </div>
+                  <Button variant="outline" size="sm" className="w-full mt-4">
+                    <Eye className="h-4 w-4 mr-2" />
+                    View Details
+                  </Button>
                 </div>
               ))}
             </div>
@@ -802,7 +942,7 @@ export default function CentralGovernmentDashboard({ user, onLogout }: Props) {
         </div>
 
         <Card className="border-0 shadow-lg">
-          <CardHeader className="flex justify-between items-center">
+          <CardHeader className="flex flex-row justify-between items-center">
             <div>
               <CardTitle className="flex items-center gap-2">
                 <DollarSign className="h-5 w-5 text-green-600" />
@@ -1050,11 +1190,19 @@ export default function CentralGovernmentDashboard({ user, onLogout }: Props) {
 
         <Card className="border-0 shadow-lg">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-blue-600" />
-              Infrastructure Projects
-            </CardTitle>
-            <CardDescription>Monitor all infrastructure projects nationwide</CardDescription>
+            <div className="flex justify-between items-center">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Building2 className="h-5 w-5 text-blue-600" />
+                  Infrastructure Projects
+                </CardTitle>
+                <CardDescription>Monitor all infrastructure projects nationwide</CardDescription>
+              </div>
+              <Button onClick={() => setCreateProjectModalOpen(true)} className="bg-blue-600 hover:bg-blue-700">
+                <Plus className="h-4 w-4 mr-2" />
+                Create Project
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             {projects.length === 0 ? (
@@ -1108,7 +1256,14 @@ export default function CentralGovernmentDashboard({ user, onLogout }: Props) {
                           </Badge>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right">
-                          <Button variant="outline" size="sm">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => {
+                              setSelectedProject(project);
+                              setProjectDetailModalOpen(true);
+                            }}
+                          >
                             <Eye className="h-4 w-4" />
                           </Button>
                         </td>
@@ -1170,7 +1325,11 @@ export default function CentralGovernmentDashboard({ user, onLogout }: Props) {
           </CardHeader>
           <CardContent>
             {contractors.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">No contractors registered</div>
+              <div className="text-center py-8 text-gray-500">
+                <Users className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                <p>No contractors registered</p>
+                <p className="text-sm">Registered contractors will appear here</p>
+              </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {contractors.map((contractor: any) => (
@@ -1407,6 +1566,188 @@ export default function CentralGovernmentDashboard({ user, onLogout }: Props) {
         </DialogContent>
       </Dialog>
 
+      {/* Create Project Modal */}
+      <Dialog open={createProjectModalOpen} onOpenChange={setCreateProjectModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Create New Project</DialogTitle>
+            <DialogDescription>
+              Create a new infrastructure project. Central Government can create projects of all sizes.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <form onSubmit={handleCreateProject} className="space-y-4 mt-4">
+            {projectValidationError && (
+              <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>{projectValidationError}</AlertDescription>
+              </Alert>
+            )}
+
+            {/* Project Size Info */}
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertDescription>
+                <strong>Project Size Guidelines:</strong>
+                <ul className="mt-2 space-y-1 text-sm">
+                  <li>• <strong>Small:</strong> Rs. 10 Lakh - 10 Crore</li>
+                  <li>• <strong>Medium:</strong> Rs. 10 Crore - 500 Crore</li>
+                  <li>• <strong>Large:</strong> Rs. 500 Crore - 5000 Crore</li>
+                </ul>
+              </AlertDescription>
+            </Alert>
+            
+            <div className="space-y-2">
+              <Label htmlFor="projectTitle">Project Title</Label>
+              <Input
+                id="projectTitle"
+                value={projectForm.title}
+                onChange={(e) => setProjectForm({ ...projectForm, title: e.target.value })}
+                placeholder="e.g., National Highway Extension"
+                required
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="projectDescription">Description</Label>
+              <Textarea
+                id="projectDescription"
+                value={projectForm.description}
+                onChange={(e) => setProjectForm({ ...projectForm, description: e.target.value })}
+                placeholder="Detailed description of the project..."
+                rows={3}
+                required
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="projectSize">Project Size</Label>
+                <Select
+                  value={projectForm.size}
+                  onValueChange={(value) => setProjectForm({ ...projectForm, size: value as any })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select size" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {getProjectSizesByLevel('CENTRAL').map((size) => (
+                      <SelectItem key={size} value={size}>
+                        {size} - {getProjectSizeBudgetRange(size).label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="projectBudget">Budget (Rs.)</Label>
+                <Input
+                  id="projectBudget"
+                  type="number"
+                  value={projectForm.budget}
+                  onChange={(e) => setProjectForm({ ...projectForm, budget: e.target.value })}
+                  placeholder="Enter budget amount"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="projectPriority">Priority</Label>
+                <Select
+                  value={projectForm.priority}
+                  onValueChange={(value) => setProjectForm({ ...projectForm, priority: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="LOW">Low</SelectItem>
+                    <SelectItem value="MEDIUM">Medium</SelectItem>
+                    <SelectItem value="HIGH">High</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="projectProvince">Province</Label>
+                <Select
+                  value={projectForm.province}
+                  onValueChange={(value) => setProjectForm({ ...projectForm, province: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select province" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Koshi">Koshi</SelectItem>
+                    <SelectItem value="Madhesh">Madhesh</SelectItem>
+                    <SelectItem value="Bagmati">Bagmati</SelectItem>
+                    <SelectItem value="Gandaki">Gandaki</SelectItem>
+                    <SelectItem value="Lumbini">Lumbini</SelectItem>
+                    <SelectItem value="Karnali">Karnali</SelectItem>
+                    <SelectItem value="Sudurpashchim">Sudurpashchim</SelectItem>
+                    <SelectItem value="Multiple">Multiple Provinces</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="projectLocalUnit">Local Unit / Area</Label>
+              <Input
+                id="projectLocalUnit"
+                value={projectForm.localUnit}
+                onChange={(e) => setProjectForm({ ...projectForm, localUnit: e.target.value })}
+                placeholder="e.g., Kathmandu Metropolitan"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="projectStartDate">Start Date</Label>
+                <Input
+                  id="projectStartDate"
+                  type="date"
+                  value={projectForm.startDate}
+                  onChange={(e) => setProjectForm({ ...projectForm, startDate: e.target.value })}
+                  required
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="projectEndDate">Expected End Date</Label>
+                <Input
+                  id="projectEndDate"
+                  type="date"
+                  value={projectForm.endDate}
+                  onChange={(e) => setProjectForm({ ...projectForm, endDate: e.target.value })}
+                  required
+                />
+              </div>
+            </div>
+            
+            <div className="flex gap-2 pt-4">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={() => {
+                  setCreateProjectModalOpen(false);
+                  setProjectValidationError('');
+                }} 
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button type="submit" className="flex-1 bg-purple-600 hover:bg-purple-700">
+                Create Project
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
       {/* Project Detail Modal */}
       <Dialog open={projectDetailModalOpen} onOpenChange={setProjectDetailModalOpen}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
@@ -1419,6 +1760,16 @@ export default function CentralGovernmentDashboard({ user, onLogout }: Props) {
           
           {selectedProject && (
             <div className="space-y-4 mt-4">
+              <div className="flex gap-2">
+                <Badge variant={selectedProject.priority === 'HIGH' ? 'destructive' : 'secondary'}>
+                  {selectedProject.priority} Priority
+                </Badge>
+                <Badge variant="outline">{selectedProject.size}</Badge>
+                <Badge variant={selectedProject.status === 'COMPLETED' ? 'default' : selectedProject.status === 'DELAYED' ? 'destructive' : 'secondary'}>
+                  {selectedProject.status}
+                </Badge>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label className="text-gray-500">Budget</Label>
@@ -1479,10 +1830,46 @@ export default function CentralGovernmentDashboard({ user, onLogout }: Props) {
                   <span className="font-medium">{selectedProject.progress}%</span>
                 </div>
               </div>
+
+              <div>
+                <Label className="text-gray-500">Budget Utilization</Label>
+                <div className="flex items-center gap-2 mt-1">
+                  <div className="flex-1 bg-gray-200 rounded-full h-3">
+                    <div 
+                      className="bg-purple-600 h-3 rounded-full"
+                      style={{ width: `${(selectedProject.spentAmount / selectedProject.budget) * 100}%` }}
+                    ></div>
+                  </div>
+                  <span className="font-medium">{((selectedProject.spentAmount / selectedProject.budget) * 100).toFixed(1)}%</span>
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-4">
+                <Button variant="outline" className="flex-1">
+                  <FileText className="h-4 w-4 mr-2" />
+                  View Reports
+                </Button>
+                <Button variant="outline" className="flex-1">
+                  <BarChart3 className="h-4 w-4 mr-2" />
+                  Analytics
+                </Button>
+              </div>
             </div>
           )}
         </DialogContent>
       </Dialog>
     </div>
   );
+}
+
+// Helper function needs to be outside component for use in validation
+function formatCurrency(amount: number): string {
+  if (amount >= 1000000000) {
+    return `Rs. ${(amount / 1000000000).toFixed(2)} Billion`;
+  } else if (amount >= 10000000) {
+    return `Rs. ${(amount / 10000000).toFixed(2)} Crore`;
+  } else if (amount >= 100000) {
+    return `Rs. ${(amount / 100000).toFixed(2)} Lakh`;
+  }
+  return `Rs. ${amount.toLocaleString()}`;
 }

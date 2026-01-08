@@ -72,35 +72,36 @@ export default function Home() {
     }
   };
 
-  const handleLogin = async (role: UserRole, data: any) => {
-    setIsLoading(true);
-    try {
-      const roleOption = roleOptions.find(r => r.value === role);
-      
-      const response = await fetch('/api/users', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...data,
-          ministry: roleOption?.ministry,
-          provinceId: selectedProvince || undefined,
-          localUnitId: selectedLocalUnit || undefined,
-        })
-      });
+  const handleLogin = async (role: string, data: any) => {
+  setIsLoading(true);
+  try {
+    const response = await fetch('/api/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
 
-      const result = await response.json();
+    const result = await response.json();
 
-      if (result.success) {
-        setUser(result.user);
+    if (result.success) {
+      setUser(result.user);
+      setSelectedRole(role as any);
+      // Show success message
+      if (result.message === 'Login successful') {
+        // Optional: show a toast notification
+        console.log('Welcome back!');
       } else {
-        alert(result.error || 'Failed to login');
+        console.log('Account created successfully!');
       }
-    } catch (error) {
-      alert('Failed to login. Please try again.');
-    } finally {
-      setIsLoading(false);
+    } else {
+      alert(result.error || 'Failed to login');
     }
-  };
+  } catch (error) {
+    alert('Failed to login. Please try again.');
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   const handleLogout = () => {
     setUser(null);
@@ -530,19 +531,19 @@ export default function Home() {
                       </div>
                     )}
 
-                    <Button
-                      type="submit"
-                      className={`w-full ${
-                        selectedCategory === 'CENTRAL' ? 'bg-purple-600 hover:bg-purple-700' :
-                        selectedCategory === 'PROVINCIAL' ? 'bg-indigo-600 hover:bg-indigo-700' :
-                        selectedCategory === 'LOCAL' ? 'bg-emerald-600 hover:bg-emerald-700' :
-                        selectedCategory === 'CONTRACTOR' ? 'bg-teal-600 hover:bg-teal-700' :
-                        'bg-cyan-600 hover:bg-cyan-700'
-                      }`}
-                      disabled={isLoading || (selectedCategory === 'CENTRAL' && !selectedRole)}
+                   <Button
+                    type="submit"
+                    className={`w-full ${
+                    selectedCategory === 'CENTRAL' ? 'bg-purple-600 hover:bg-purple-700' :
+                    selectedCategory === 'PROVINCIAL' ? 'bg-indigo-600 hover:bg-indigo-700' :
+                     selectedCategory === 'LOCAL' ? 'bg-emerald-600 hover:bg-emerald-700' :
+                    selectedCategory === 'CONTRACTOR' ? 'bg-teal-600 hover:bg-teal-700' :
+                  'bg-cyan-600 hover:bg-cyan-700'
+                  }`}
+                   disabled={isLoading || (selectedCategory === 'CENTRAL' && !selectedRole)}
                     >
-                      {isLoading ? 'Logging in...' : 'Access Dashboard'}
-                    </Button>
+                  {isLoading ? 'Processing...' : 'Login / Register'}
+                </Button>
 
                     <Button
                       type="button"

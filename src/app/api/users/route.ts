@@ -8,17 +8,49 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { email, name, role, nidNumber, phone, address } = body;
 
+    console.log('=== LOGIN/REGISTRATION ATTEMPT ===');
+    console.log('Role:', role);
+    console.log('Email:', email);
+
     if (!email || !role) {
       return NextResponse.json({ error: 'Email and role are required' }, { status: 400 });
     }
 
-    if (role === 'CITIZEN' && !nidNumber) {
-      return NextResponse.json({ error: 'NID number is required for citizens' }, { status: 400 });
+    // Check if user exists
+    const existingUser = await db.user.findUnique({ 
+      where: { email },
+      include: {
+        contractorRating: true,
+        contractorProgress: true
+      }
+    });
+
+    if (existingUser) {
+      // User exists - LOGIN
+      if (existingUser.role !== role) {
+        return NextResponse.json({ 
+          error: `This email is registered as ${existingUser.role}. Please select the correct role.` 
+        }, { status: 400 });
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: 'Login successful',
+        user: {
+          id: existingUser.id,
+          email: existingUser.email,
+          name: existingUser.name,
+          role: existingUser.role,
+          nidNumber: existingUser.nidNumber,
+          phone: existingUser.phone,
+          address: existingUser.address
+        }
+      }, { status: 200 });
     }
 
-    const existingUser = await db.user.findUnique({ where: { email } });
-    if (existingUser) {
-      return NextResponse.json({ error: 'User already exists' }, { status: 409 });
+    // User doesn't exist - REGISTER
+    if (role === 'CITIZEN' && !nidNumber) {
+      return NextResponse.json({ error: 'NID number is required for citizens' }, { status: 400 });
     }
 
     const user = await db.user.create({
@@ -53,19 +85,33 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      message: 'Registration successful',
       user: {
         id: user.id,
         email: user.email,
         name: user.name,
-        role: user.role
+        role: user.role,
+        nidNumber: user.nidNumber,
+        phone: user.phone,
+        address: user.address
       }
     }, { status: 201 });
 
-  } catch (error) {
-    return NextResponse.json({ error: 'Failed to register user' }, { status: 500 });
+  } catch (error: any) {
+    console.error('=== REGISTRATION ERROR ===');
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error code:', error.code);
+    console.error('Error meta:', error.meta);
+    console.error('========================');
+    
+    return NextResponse.json({ 
+      error: 'Failed to process request',
+      details: error.message,
+      code: error.code
+    }, { status: 500 });
   }
 }
-
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
